@@ -1,0 +1,9 @@
+{
+  "bot_token": "Mzk4MDU2MzU3OTcyMTQ4MjI0.DVHfPg.LZW2apRhWZScyIlKRhjTjpfe-wU",
+  "hostname": "http://localhost",
+  "port": 1337,
+  "text_color": "#ffffff",
+  "accent_color": "#7289DA",
+  "voice_server": "247058897821499393",
+  "voice_channel": "395617713298604032"
+}
