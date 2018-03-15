@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html>
+<head>
+	<title>Discord Alerts</title>
+	<script src="/socket.io.js"></script>
+</head>
+<body>
+  <style type="text/css">
+    @import url('https://fonts.googleapis.com/css?family=Montserrat');
+
+    html, body {
+      margin:0;
+      padding:0;
+      overflow:hidden;
+    }
+
+    #alert-container {
+      font-family: "Montserrat" !important;
+      font-size:20px;
+      color: {{ config.text_color }};
+      position:absolute;
+      top:0;
+      left:-452px;
+      width: 450px;
+      height: 65px;
+      background-color: #13181B;
+      border:1px solid #242A2A;
+      box-shadow: 0 1px 3px rgba(0,0,0,.08);
+      transition:left 0.2s;
+    }
+
+    #alert-container.shown {
+      left:0;
+    }
+
+    #logo {
+      position:relative;
+      top:12px;
+      left:8px;
+      width:40px;
+      height:40px;
+      border-radius:40px;
+      float:left;
+      margin-right:20px;
+    }
+
+    #message {
+      padding:7px;
+      color: {{ config.text_color }};
+    }
+
+    #message span {
+      display: block;
+      text-overflow: ellipsis;
+      overflow: hidden;
+      color: {{ config.accent_color }};
+    }
+  </style>
+
+  <div id="alert-container">
+    <img id="logo" onerror="this.src='/fallback.png'" />
+    <div id="message">
+      <!-- <span id="user">Frosthaven</span> has joined our discord community! -->
+    </div>
+  </div>
+
+	<script>
+    /**
+    * Fetches parameters from the url string
+    * @return {object} an object containing all url parameters
+    */
+    const _getUrlParams = () => {
+      // This function is anonymous, is executed immediately and
+      // the return value is assigned to QueryString!
+      let queryString = {};
+      let query = window.location.search.substring(1);
+      let vars = query.split('&');
+      for (let i=0; i<vars.length; i++) {
+        let pair = vars[i].split('=');
+            // If first entry with this name
+        if (typeof queryString[pair[0]] === 'undefined') {
+          queryString[pair[0]] = decodeURIComponent(pair[1]);
+            // If second entry with this name
+        } else if (typeof queryString[pair[0]] === 'string') {
+          let arr = [queryString[pair[0]], decodeURIComponent(pair[1])];
+          queryString[pair[0]] = arr;
+            // If third or later entry with this name
+        } else {
+          queryString[pair[0]].push(decodeURIComponent(pair[1]));
+        }
+      }
+      return queryString;
+    }
+
+    const _params   = _getUrlParams();
+    const sfx       = new Audio('/alert.mp3');
+
+    const alert = {
+      running: false,
+      elapsed: 0,
+      count: 0,
+      run: () => {
+        document.getElementById('alert-container').classList.add('shown');
+        alert.count++;
+        if (!alert.running) {
+          sfx.play();
+          alert.running = true;
+          alert.elapsed = 0;
+          window.alertInterval = window.setInterval(() => {
+            alert.elapsed = alert.elapsed + 1000;
+            if (alert.elapsed >= 5000) {
+              window.clearInterval(alertInterval);
+              alert.running = false;
+              alert.count = 0;
+              document.getElementById('alert-container').classList.remove('shown');
+            }
+          }, 1000);
+        } else {
+          alert.elapsed = 0;
+        }
+      }
+    };
+
+    document.addEventListener("DOMContentLoaded", function(event) {
+      const socket = io.connect(`http://${window.location.hostname}:{{config.port}}`);
+      socket.on('connection', (data) => {
+        console.log('Websocket connection established on port {{config.port}}');
+      });
+
+      socket.on('alert', (data) => {
+        console.log(data);
+        
+        switch (data.type) {
+          case 'guildMemberAdd':
+
+            document.getElementById('logo').src = data.serverData.icon;
+            if (alert.count > 0) {
+              document.getElementById('message').innerHTML = `<span id="user">${alert.count+1} New Users</span> have joined our discord community!`;
+            } else {
+              document.getElementById('message').innerHTML = `<span id="user">${data.humanUser.displayname}</span> has joined our discord community!`;
+            }
+            alert.run();
+            break;
+
+          default:
+            break;
+        }
+      });
+    });
+	</script>
+</body>
+</html>

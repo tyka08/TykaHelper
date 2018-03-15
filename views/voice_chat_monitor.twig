@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html>
+<head>
+	<title>Discord Alerts</title>
+	<script src="/socket.io.js"></script>
+</head>
+<body>
+  <style type="text/css">
+    @import url('https://fonts.googleapis.com/css?family=Montserrat');
+
+    html, body {
+      margin:0;
+      padding:0;
+      overflow:hidden;
+    }
+
+    #voice-container {
+      font-family: "Montserrat" !important;
+      font-size: 16px;
+    }
+
+    #voice-container>div {
+      transition:background-color .2s;
+      float: left;
+      width: 180px;
+      overflow: hidden;
+      margin-right: 4px;
+      margin-bottom: 4px;
+      background-color: rgba(0,0,0,0.3);
+      border-radius: 4px;
+      padding-left: 3px;
+    }
+
+    img.avatar {
+      width: 30px;
+      height: 30px;
+      border-radius: 30px;
+      position: relative;
+      top: 2px;
+    }
+
+    span.username {
+      position: relative;
+      left: 5px;
+      max-width: 138px;
+      text-overflow: ellipsis;
+      overflow: hidden;
+      white-space: nowrap;
+      display: inline-block;
+      line-height:27px;
+      color: {{ config.text_color }};
+    }
+
+    .voiceUser {
+      border-bottom:2px solid rgba(0,0,0,0);
+    } .voiceUser.host {
+      border-bottom:2px solid {{ config.accent_color }};
+    }
+
+    #voice-container>div.speaking {
+      background-color: {{ config.accent_color }};
+    }
+  </style>
+
+  <div id="voice-container">
+  </div>
+
+	<script>
+    /**
+    * Fetches parameters from the url string
+    * @return {object} an object containing all url parameters
+    */
+    const _getUrlParams = () => {
+      // This function is anonymous, is executed immediately and
+      // the return value is assigned to QueryString!
+      let queryString = {};
+      let query = window.location.search.substring(1);
+      let vars = query.split('&');
+      for (let i=0; i<vars.length; i++) {
+        let pair = vars[i].split('=');
+            // If first entry with this name
+        if (typeof queryString[pair[0]] === 'undefined') {
+          queryString[pair[0]] = decodeURIComponent(pair[1]);
+            // If second entry with this name
+        } else if (typeof queryString[pair[0]] === 'string') {
+          let arr = [queryString[pair[0]], decodeURIComponent(pair[1])];
+          queryString[pair[0]] = arr;
+            // If third or later entry with this name
+        } else {
+          queryString[pair[0]].push(decodeURIComponent(pair[1]));
+        }
+      }
+      return queryString;
+    }
+
+    const _params   = _getUrlParams();
+    const alert     = new Audio('/alert.mp3');
+
+    const timer = {
+      running: false,
+      elapsed: 0,
+      run: () => {
+        if (!timer.running) {
+          timer.running = true;
+          timer.elapsed = 0;
+          window.timerInterval = window.setInterval(() => {
+            timer.elapsed = timer.elapsed + 1000;
+            if (timer.elapsed >= 5000) {
+              window.clearInterval(timerInterval);
+              timer.running = false;
+              document.getElementById('alert-container').classList.remove('shown');
+            }
+          }, 1000);
+        } else {
+          timer.elapsed = 0;
+        }
+      }
+    };
+
+    const sortUsers = () => {
+      const list = document.getElementById('voice-container');
+
+      let items = list.childNodes;
+      let itemsArr = [];
+      for (let i in items) {
+          if (items[i].nodeType == 1) { // get rid of the whitespace text nodes
+              itemsArr.push(items[i]);
+          }
+      }
+
+      itemsArr.sort((a, b) => {
+        return a.innerHTML == b.innerHTML
+                ? 0
+                : (a.innerHTML > b.innerHTML ? 1 : -1);
+      });
+
+      for (i = 0; i < itemsArr.length; ++i) {
+        list.appendChild(itemsArr[i]);
+      }
+    };
+
+    const renderUser = (humanUser) => {
+      if (!document.getElementById(humanUser.id) && humanUser && humanUser.id) {
+        // we need to create the user element
+        const div = document.createElement('div');
+        div.id = humanUser.id;
+
+        div.classList.add('voiceUser');
+        // is this user listed as a host?
+        if (_params['host'] === humanUser.id) {
+          div.classList.add('host');
+        }
+
+        // set the inner html
+        let avatarExtension = (humanUser.avatar.startsWith('a_'))
+          ? 'gif'
+          : 'png';
+        div.innerHTML = `<img class="avatar" displayname="${humanUser.displayname}" onerror="this.src='/fallback.png'" src="https://cdn.discordapp.com/avatars/${humanUser.id}/${humanUser.avatar}.${avatarExtension}" /><span class="username">${humanUser.displayname}</span>`;
+        document.getElementById('voice-container').appendChild(div);
+
+        sortUsers();
+      };
+    };
+
+    const removeUser = (humanUser) => {
+      document.getElementById(humanUser.id).outerHTML='';
+    };
+
+    document.addEventListener("DOMContentLoaded", function(event) {
+      const socket = io.connect(`http://${window.location.hostname}:{{config.port}}`);
+      socket.on('connection', (data) => {
+        socket.emit('watchVoiceChannel', {
+          channelID: _params['vc']
+        });
+        console.log('Websocket connection established on port {{config.port}}');
+      });
+
+      socket.on('alert', (data) => {
+        console.log(data);
+        let el;
+        switch (data.type) {
+          case 'userList':
+            // populate the html with user entries
+            data.humanUsers.forEach((entry) => {
+              renderUser(entry);
+            });
+            break;
+          
+          case 'speech':
+            // change speaking display if they are in this voice channel
+            el = document.getElementById(data.humanUser.id);
+            if (el) {
+              if (data.speaking) {
+                el.classList.add('speaking');
+              } else {
+                el.classList.remove('speaking');
+              }
+            }
+            break;
+          
+          case 'voiceDisconnect':
+            // remove the user from the display if they are in it
+            el = document.getElementById(data.humanUser.id);
+            if (el) {
+              removeUser(data.humanUser);
+            }
+            break;
+          
+          case 'voiceConnect':
+            el = document.getElementById(data.humanUser.id);
+            if (!el && data.channel == _params['vc']) {
+              // add the user to our display if they are in this voice channel
+              renderUser(data.humanUser);
+            } else if (el && data.channel !== _params['vc']) {
+              // remove the user from our display if they joined a different channel
+              removeUser(data.humanUser);
+            }
+            break;
+        }
+      });
+    });
+	</script>
+</body>
+</html>
