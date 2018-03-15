@@ -1,6 +1,6 @@
 {
   "bot_token": "Mzk4MDU2MzU3OTcyMTQ4MjI0.DVHfPg.LZW2apRhWZScyIlKRhjTjpfe-wU",
-  "hostname": "https://tyka-helper.herokuapp.com",
+  "hostname": "http://tyka-helper.herokuapp.com",
   "port": 1337,
   "text_color": "#ffffff",
   "accent_color": "#7289DA",
